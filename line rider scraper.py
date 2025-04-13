@@ -15,6 +15,7 @@ else:
 running = False
 waiting = True
 search_thread = None
+start_time = datetime.now()
 
 # Extra UI state for tracking last check, check count, and videos found
 extra_ui_state = {
@@ -89,6 +90,8 @@ def run_manual_check():
     seen_videos = load_seen_videos()
     found = False
 
+    skipped = 0
+
     for entry in results:
         title = entry.get("title")
         url = entry.get("url") or entry.get("webpage_url")
@@ -101,17 +104,18 @@ def run_manual_check():
         name = title + " | " + uploader
         normalized_title = normalize_string(title)
 
+        if normalized_search_term not in normalized_title :
+            skipped += 1
+            continue
+
         print(f"\n Checking: {title} by {uploader}")
-        print(f"   URL: {url}")
+        print(f"   URL: {short_url}")
         print(f"   Upload Date: {upload_date}")
         print(f"   Already seen: {'✅' if video_str in seen_videos else '❌'}")
 
-        if normalized_search_term not in normalized_title:
-            continue
-
         if video_str not in seen_videos:
             print(f"\n Title: {title}")
-            print(f" Link: {short_url}")
+            print(f" Link: {url}")
             print(f" Uploaded: {datetime.strptime(str(entry['upload_date']), '%Y%m%d')}")
             found = True
             save_seen_video(video_str)
@@ -119,6 +123,7 @@ def run_manual_check():
             extra_ui_state["videos_found"] += 1
 
     # Update UI state
+    print(f"\nskipped: {skipped}")
     extra_ui_state["check_count"] += 1       
 
 def loop_search():
@@ -189,7 +194,10 @@ def main_loop():
         draw_button("Stop", stop_btn, stop_color if running else button_color)
         draw_button("Quit", quit_btn, button_color)
 
-        # Draw status text near bottom
+        uptime = datetime.now() - start_time
+        uptime_text = small_font.render(f"Uptime: {str(uptime).split('.')[0]}", True, text_color)
+        screen.blit(uptime_text, (10, 235))
+
         if extra_ui_state["last_check"]:
             last_check_label = small_font.render(f"Last check: {extra_ui_state['last_check']}", True, text_color)
             screen.blit(last_check_label, (10, 240))
