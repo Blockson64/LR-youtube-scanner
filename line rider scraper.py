@@ -102,10 +102,9 @@ def run_manual_check():
         normalized_title = normalize_string(title)
 
         print(f"\n Checking: {title} by {uploader}")
-        print(f"   URL: {short_url}")
+        print(f"   URL: {url}")
         print(f"   Upload Date: {upload_date}")
         print(f"   Already seen: {'✅' if video_str in seen_videos else '❌'}")
-        print(f"normalized_search_term: {normalized_search_term} | normalized_title: {normalized_title}")
 
         if normalized_search_term not in normalized_title:
             continue
@@ -141,7 +140,7 @@ def start_checking():
         running = True
         search_thread = threading.Thread(target=loop_search, daemon=True)
         search_thread.start()
-        print("Started searching.")
+        print("\nStarted searching.")
 
 def stop_checking():
     global running
