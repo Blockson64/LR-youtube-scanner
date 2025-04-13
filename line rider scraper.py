@@ -17,7 +17,7 @@ def search_youtube(term, max_results=20):
     """Search YouTube for videos uploaded after yesterday and return metadata entries."""
     yesterday = (datetime.today() - timedelta(days=1)).strftime('%Y-%m-%d')
     search_term_with_date = f"\"{term}\" after:{yesterday}"
-    search_url = f"ytsearch{max_results}:{search_term_with_date}"
+    search_url = f"ytsearchdate{max_results}:{search_term_with_date}"
 
     # Step 1: Flat extract (metadata only, avoids live errors)
     flat_opts = {
@@ -90,8 +90,16 @@ def run_manual_check():
         title = entry.get("title")
         url = entry.get("url") or entry.get("webpage_url")
         uploader = entry.get('uploader', 'Unknown author')
+        upload_date = entry.get("upload_date", "Unknown")
+
         name = title + " | " + uploader
         normalized_title = normalize_string(title)
+
+        # Debug print: every video being checked
+        print(f"\n👀 Checking: {title} by {uploader}")
+        print(f"   URL: {url}")
+        print(f"   Upload Date: {upload_date}")
+        print(f"   Already seen: {'✅' if name in seen_videos else '❌'}")
 
         if normalized_search_term not in normalized_title:
             continue
