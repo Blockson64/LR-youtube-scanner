@@ -18,7 +18,7 @@ This tool looks for new **Line Rider** videos on YouTube, checks for uploads fro
 ### Usage:
 1. Run the script:
     ```bash
-    python line rider scraper.py
+    python "line rider scraper.py"
     ```
 2. You can either use the buttons in the UI or type in the console:
     - Type `start` to start checking.
