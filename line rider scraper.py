@@ -16,6 +16,7 @@ running = False
 waiting = True
 search_thread = None
 start_time = datetime.now()
+log_file = "log.txt"
 
 # Extra UI state for tracking last check, check count, and videos found
 extra_ui_state = {
@@ -66,7 +67,7 @@ def is_uploaded_today(entry):
 
 def load_seen_videos():
     try:
-        with open("seen_videos.txt", "r") as file:
+        with open(log_file, "r") as file:
             return set(file.read().splitlines())
     except FileNotFoundError:
         return set()
@@ -74,7 +75,7 @@ def load_seen_videos():
 def save_seen_video(str):
 
     # Save both the title and the short URL
-    with open("seen_videos.txt", "a") as file:
+    with open(log_file, "a") as file:
         file.write(f"{str}\n")
 
 def run_manual_check():
