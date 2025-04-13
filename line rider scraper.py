@@ -70,13 +70,11 @@ def load_seen_videos():
     except FileNotFoundError:
         return set()
 
-def save_seen_video(title, video_id):
-    # Generate a shorter URL using the video_id
-    short_url = f"https://youtu.be/{video_id}"
+def save_seen_video(str):
 
     # Save both the title and the short URL
     with open("seen_videos.txt", "a") as file:
-        file.write(f"{title} | {short_url}\n")
+        file.write(f"{str}\n")
 
 def run_manual_check():
     search_term = "line rider"
@@ -97,6 +95,8 @@ def run_manual_check():
         uploader = entry.get('uploader', 'Unknown author')
         upload_date = entry.get("upload_date", "Unknown")
         video_id = entry.get("id")
+        short_url = f"https://youtu.be/{video_id}"
+        video_str = title + " | " + uploader + " | " + short_url
 
         name = title + " | " + uploader
         normalized_title = normalize_string(title)
@@ -104,17 +104,17 @@ def run_manual_check():
         print(f"\n Checking: {title} by {uploader}")
         print(f"   URL: {url}")
         print(f"   Upload Date: {upload_date}")
-        print(f"   Already seen: {'✅' if name in seen_videos else '❌'}")
+        print(f"   Already seen: {'✅' if video_str in seen_videos else '❌'}")
 
         if normalized_search_term not in normalized_title:
             continue
 
-        if is_uploaded_today(entry) and name not in seen_videos:
+        if is_uploaded_today(entry) and video_str not in seen_videos:
             print(f"\n📺 Title: {title}")
             print(f"🔗 Link: {url}")
             print(f"🕒 Uploaded: {datetime.strptime(str(entry['upload_date']), '%Y%m%d')}")
             found = True
-            save_seen_video(name, video_id)
+            save_seen_video(video_str)
             seen_videos.add(name)
             extra_ui_state["videos_found"] += 1
 
