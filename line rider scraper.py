@@ -110,9 +110,9 @@ def run_manual_check():
             continue
 
         if video_str not in seen_videos:
-            print(f"\n📺 Title: {title}")
-            print(f"🔗 Link: {url}")
-            print(f"🕒 Uploaded: {datetime.strptime(str(entry['upload_date']), '%Y%m%d')}")
+            print(f"\n Title: {title}")
+            print(f" Link: {short_url}")
+            print(f" Uploaded: {datetime.strptime(str(entry['upload_date']), '%Y%m%d')}")
             found = True
             save_seen_video(video_str)
             seen_videos.add(name)
