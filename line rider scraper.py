@@ -1,25 +1,36 @@
 import yt_dlp
 from datetime import datetime, timedelta
-import re
 import time
 import threading
+import pygame
+import sys
 
+# Platform-specific non-blocking input
+import os
+if os.name == 'nt':  # Windows
+    import msvcrt
+else:
+    import select
 
-running = False  # Global control flag for loop
+running = False
+waiting = True
+search_thread = None
 
+# Extra UI state for tracking last check, check count, and videos found
+extra_ui_state = {
+    "last_check": None,
+    "check_count": 0,
+    "videos_found": 0
+}
 
 def normalize_string(s):
-    """Normalize the string by removing special characters and converting to lowercase."""
     return s.lower().strip()
 
-
 def search_youtube(term, max_results=20):
-    """Search YouTube for videos uploaded after yesterday and return metadata entries."""
     yesterday = (datetime.today() - timedelta(days=1)).strftime('%Y-%m-%d')
     search_term_with_date = f"\"{term}\" after:{yesterday}"
     search_url = f"ytsearchdate{max_results}:{search_term_with_date}"
 
-    # Step 1: Flat extract (metadata only, avoids live errors)
     flat_opts = {
         "quiet": True,
         "extract_flat": True,
@@ -30,10 +41,9 @@ def search_youtube(term, max_results=20):
         result = ydl.extract_info(search_url, download=False)
 
     entries = result.get("entries", [])
-
-    # Step 2: Fully extract metadata for each valid URL
     full_entries = []
     full_opts = {"quiet": True}
+
     with yt_dlp.YoutubeDL(full_opts) as ydl:
         for entry in entries:
             url = entry.get("url") or entry.get("webpage_url")
@@ -41,62 +51,57 @@ def search_youtube(term, max_results=20):
                 full_info = ydl.extract_info(url, download=False)
                 full_entries.append(full_info)
             except yt_dlp.utils.DownloadError:
-                continue  # Skip videos that can't be accessed
+                continue
 
     print(f"\nSearch URL: https://www.youtube.com/results?search_query={search_term_with_date}\n")
     return full_entries
 
-
 def is_uploaded_today(entry):
-    """Check if the video was uploaded today using the upload_date field."""
     upload_date = entry.get("upload_date")
     if upload_date:
         upload_date_obj = datetime.strptime(str(upload_date), "%Y%m%d")
         return upload_date_obj.date() == datetime.today().date()
     return False
 
-
 def load_seen_videos():
-    """Load the list of already seen videos from 'seen_videos.txt'."""
     try:
         with open("seen_videos.txt", "r") as file:
             return set(file.read().splitlines())
     except FileNotFoundError:
         return set()
 
+def save_seen_video(title, video_id):
+    # Generate a shorter URL using the video_id
+    short_url = f"https://youtu.be/{video_id}"
 
-def save_seen_video(title):
-    """Save a new video title to 'seen_videos.txt'."""
+    # Save both the title and the short URL
     with open("seen_videos.txt", "a") as file:
-        file.write(title + "\n")
-
+        file.write(f"{title} | {short_url}\n")
 
 def run_manual_check():
     search_term = "line rider"
     normalized_search_term = normalize_string(search_term)
 
-    print(f"\nNormalized search term: '{normalized_search_term}'\n")
     print(f"\nSearching for: {search_term}")
     results = search_youtube(search_term)
-
     if not results:
         print("No search results found.")
         return
 
-    seen_videos = load_seen_videos()  # Load previously seen videos
-
+    seen_videos = load_seen_videos()
     found = False
+
     for entry in results:
         title = entry.get("title")
         url = entry.get("url") or entry.get("webpage_url")
         uploader = entry.get('uploader', 'Unknown author')
         upload_date = entry.get("upload_date", "Unknown")
+        video_id = entry.get("id")
 
         name = title + " | " + uploader
         normalized_title = normalize_string(title)
 
-        # Debug print: every video being checked
-        print(f"\n👀 Checking: {title} by {uploader}")
+        print(f"\n Checking: {title} by {uploader}")
         print(f"   URL: {url}")
         print(f"   Upload Date: {upload_date}")
         print(f"   Already seen: {'✅' if name in seen_videos else '❌'}")
@@ -104,63 +109,127 @@ def run_manual_check():
         if normalized_search_term not in normalized_title:
             continue
 
-        if is_uploaded_today(entry):
-            # Check if the video has already been seen
-            if name in seen_videos:
-                continue  # Skip already seen video
-
-            # Print video details for a new video
+        if is_uploaded_today(entry) and name not in seen_videos:
             print(f"\n📺 Title: {title}")
             print(f"🔗 Link: {url}")
             print(f"🕒 Uploaded: {datetime.strptime(str(entry['upload_date']), '%Y%m%d')}")
             found = True
+            save_seen_video(name, video_id)
+            seen_videos.add(name)
+            extra_ui_state["videos_found"] += 1
 
-            # Save the new video title to the seen list
-            save_seen_video(name)
-            seen_videos.add(name)  # Update the in-memory set
-
-    if not found:
-        print("No new videos uploaded today matching the search term were found.")
-
+    # Update UI state
+    extra_ui_state["check_count"] += 1       
 
 def loop_search():
-    global running
+    global running, waiting
     while running:
+        waiting = False
         run_manual_check()
-        print("\nWaiting 5 minutes until next check...\n")
-        time.sleep(300)
+        print(f"Last check: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        print("Waiting 5 minutes until next check...\n")
+        waiting = True
+        for _ in range(300):
+            if not running:
+                break
+            time.sleep(1)
 
+def start_checking():
+    global search_thread, running
+    if not running:
+        running = True
+        search_thread = threading.Thread(target=loop_search, daemon=True)
+        search_thread.start()
+        print("Started searching.")
 
-if __name__ == "__main__":
-    print("Type 'start' to begin checking for 'line rider' every 5 minutes.")
-    print("Type 'stop' to end the loop.")
-    print("Type 'exit' to quit the program.\n")
+def stop_checking():
+    global running
+    if running:
+        running = False
+        print("Stopping...")
 
-    search_thread = None
+def get_console_input():
+    if os.name == 'nt':  # Windows
+        if msvcrt.kbhit():
+            return input("> ").strip().lower()
+    else:  # Unix/Linux/Mac
+        if select.select([sys.stdin], [], [], 0.0)[0]:
+            return sys.stdin.readline().strip().lower()
+    return None
+
+def main_loop():
+    pygame.init()
+    screen = pygame.display.set_mode((400, 300))
+    pygame.display.set_caption("YouTube Checker")
+    font = pygame.font.SysFont(None, 32)
+    small_font = pygame.font.SysFont(None, 24)
+    clock = pygame.time.Clock()
+
+    bg_color = (40, 40, 40)
+    button_color = (90, 90, 90)
+    text_color = (230, 230, 230)
+    active_color = (120, 180, 120)
+    stop_color = (180, 120, 120)
+
+    start_btn = pygame.Rect(125, 60, 150, 40)
+    stop_btn = pygame.Rect(125, 120, 150, 40)
+    quit_btn = pygame.Rect(125, 180, 150, 40)
+
+    print("Type 'start', 'stop', 'exit', or use the buttons in the window.\n")
 
     while True:
-        command = input("> ").strip().lower()
+        screen.fill(bg_color)
 
-        if command == "start":
-            if not running:
-                running = True
-                search_thread = threading.Thread(target=loop_search, daemon=True)
-                search_thread.start()
-                print("Started searching.\n")
+        def draw_button(text, rect, color):
+            pygame.draw.rect(screen, color, rect)
+            label = font.render(text, True, text_color)
+            screen.blit(label, label.get_rect(center=rect.center))
+
+        draw_button("Start", start_btn, active_color if not running else button_color)
+        draw_button("Stop", stop_btn, stop_color if running else button_color)
+        draw_button("Quit", quit_btn, button_color)
+
+        # Draw status text near bottom
+        if extra_ui_state["last_check"]:
+            last_check_label = small_font.render(f"Last check: {extra_ui_state['last_check']}", True, text_color)
+            screen.blit(last_check_label, (10, 240))
+
+        count_label = small_font.render(
+            f"Checks: {extra_ui_state['check_count']}   Videos Found: {extra_ui_state['videos_found']}",
+            True, text_color
+        )
+        screen.blit(count_label, (10, 265))
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                stop_checking()
+                pygame.quit()
+                return
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                if start_btn.collidepoint(event.pos):
+                    start_checking()
+                elif stop_btn.collidepoint(event.pos):
+                    stop_checking()
+                elif quit_btn.collidepoint(event.pos):
+                    stop_checking()
+                    pygame.quit()
+                    return
+
+        command = get_console_input()
+        if command:
+            if command == "start":
+                start_checking()
+            elif command == "stop":
+                stop_checking()
+            elif command == "exit":
+                stop_checking()
+                pygame.quit()
+                return
             else:
-                print("Already running.\n")
+                print("Unknown command. Use 'start', 'stop', or 'exit'.")
 
-        elif command == "stop":
-            if running:
-                running = False
-                print("Stopping... Will end after current check finishes.\n")
-            else:
-                print("Not running.\n")
+        pygame.display.flip()
+        clock.tick(30)
 
-        elif command == "exit":
-            running = False
-            print("Exiting program.")
-            break
-
-        else:
-            print("Unknown command. Use 'start', 'stop', or 'exit'.\n")
+if __name__ == "__main__":
+    main_loop()
