@@ -102,14 +102,15 @@ def run_manual_check():
         normalized_title = normalize_string(title)
 
         print(f"\n Checking: {title} by {uploader}")
-        print(f"   URL: {url}")
+        print(f"   URL: {short_url}")
         print(f"   Upload Date: {upload_date}")
         print(f"   Already seen: {'✅' if video_str in seen_videos else '❌'}")
+        print(f"normalized_search_term: {normalized_search_term} | normalized_title: {normalized_title}")
 
         if normalized_search_term not in normalized_title:
             continue
 
-        if is_uploaded_today(entry) and video_str not in seen_videos:
+        if video_str not in seen_videos:
             print(f"\n📺 Title: {title}")
             print(f"🔗 Link: {url}")
             print(f"🕒 Uploaded: {datetime.strptime(str(entry['upload_date']), '%Y%m%d')}")
