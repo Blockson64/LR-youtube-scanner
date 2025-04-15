@@ -16,7 +16,6 @@ running = False
 waiting = True
 search_thread = None
 start_time = datetime.now()
-log_file = "log.txt"
 
 # Extra UI state for tracking last check, check count, and videos found
 extra_ui_state = {
@@ -67,7 +66,7 @@ def is_uploaded_today(entry):
 
 def load_seen_videos():
     try:
-        with open(log_file, "r") as file:
+        with open("seen_videos.txt", "r") as file:
             return set(file.read().splitlines())
     except FileNotFoundError:
         return set()
@@ -75,7 +74,7 @@ def load_seen_videos():
 def save_seen_video(str):
 
     # Save both the title and the short URL
-    with open(log_file, "a") as file:
+    with open("seen_videos.txt", "a") as file:
         file.write(f"{str}\n")
 
 def run_manual_check():
@@ -116,7 +115,7 @@ def run_manual_check():
 
         if video_str not in seen_videos:
             print(f"\n Title: {title}")
-            print(f" Link: {url}")
+            print(f" Link: {short_url}")
             print(f" Uploaded: {datetime.strptime(str(entry['upload_date']), '%Y%m%d')}")
             found = True
             save_seen_video(video_str)
@@ -135,7 +134,7 @@ def loop_search():
         print(f"Last check: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         print("Waiting 5 minutes until next check...\n")
         waiting = True
-        for _ in range(300):
+        for _ in range(60 * check_rate):
             if not running:
                 break
             time.sleep(1)
@@ -164,6 +163,8 @@ def get_console_input():
     return None
 
 def main_loop():
+    global check_rate
+
     pygame.init()
     screen = pygame.display.set_mode((400, 300))
     pygame.display.set_caption("YouTube Checker")
@@ -176,10 +177,15 @@ def main_loop():
     text_color = (230, 230, 230)
     active_color = (120, 180, 120)
     stop_color = (180, 120, 120)
+    slow_color = (200, 200, 100)  # yellow
 
     start_btn = pygame.Rect(125, 60, 150, 40)
     stop_btn = pygame.Rect(125, 120, 150, 40)
     quit_btn = pygame.Rect(125, 180, 150, 40)
+    slow_mode_btn = pygame.Rect(10, 10, 130, 30)
+
+    slow_mode = False
+    check_rate = 5  # default
 
     print("Type 'start', 'stop', 'exit', or use the buttons in the window.\n")
 
@@ -194,6 +200,10 @@ def main_loop():
         draw_button("Start", start_btn, active_color if not running else button_color)
         draw_button("Stop", stop_btn, stop_color if running else button_color)
         draw_button("Quit", quit_btn, button_color)
+
+        # Slow mode button
+        slow_label = "Slow Mode"
+        draw_button(slow_label, slow_mode_btn, slow_color if slow_mode else button_color)
 
         uptime = datetime.now() - start_time
         uptime_text = small_font.render(f"Uptime: {str(uptime).split('.')[0]}", True, text_color)
@@ -223,6 +233,10 @@ def main_loop():
                     stop_checking()
                     pygame.quit()
                     return
+                elif slow_mode_btn.collidepoint(event.pos):
+                    slow_mode = not slow_mode
+                    check_rate = 30 if slow_mode else 5
+                    print(f"Slow mode {'enabled' if slow_mode else 'disabled'} — check_rate set to {check_rate}")
 
         command = get_console_input()
         if command:
@@ -239,6 +253,7 @@ def main_loop():
 
         pygame.display.flip()
         clock.tick(30)
+
 
 if __name__ == "__main__":
     main_loop()
